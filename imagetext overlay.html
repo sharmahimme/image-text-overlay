@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e1116">
+<title>Overlay Studio</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a3340;
+    --text:#e6edf3; --muted:#8b98a5; --accent:#f0b429; --accent2:#e03131;
+    --radius:12px; --tap:48px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);
+    display:flex;flex-direction:column;overflow:hidden;}
+  button{-webkit-user-select:none;user-select:none;touch-action:manipulation;}
+
+  .topbar{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--panel);
+    border-bottom:1px solid var(--border);flex:0 0 auto;z-index:30;}
+  .topbar h1{font-size:15px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar .mini{font-size:11px;color:var(--muted);font-weight:400;}
+  .topExport{display:none;border:1px solid #e8590c;color:#000;font-weight:800;font-size:15px;
+    background:linear-gradient(135deg,var(--accent),#e8590c);border-radius:10px;padding:8px 16px;
+    cursor:pointer;min-height:40px;box-shadow:0 2px 10px rgba(240,180,41,.25);}
+  .topExport:active{filter:brightness(1.1);}
+
+  .stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:#0a0d11;position:relative;}
+  .previewWrap{flex:1;display:flex;align-items:center;justify-content:center;
+    overflow:auto;padding:26px 22px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+  /* Wrapper sized to the SCALED canvas so flexbox centers it correctly */
+  .canvasHolder{position:relative;flex:0 0 auto;box-shadow:0 10px 36px rgba(0,0,0,.65);}
+  #stageInner{position:absolute;left:0;top:0;background:#0d1b2a;
+    transform-origin:top left;overflow:hidden;}
+  #bgImg{position:absolute;left:0;top:0;display:block;-webkit-user-drag:none;user-select:none;touch-action:none;}
+  #noimg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);
+    font-size:13px;text-align:center;padding:30px;line-height:1.6;
+    background:repeating-linear-gradient(45deg,#15191f,#15191f 12px,#1a1f27 12px,#1a1f27 24px);}
+
+  .overlay{position:absolute;left:0;right:0;text-align:center;z-index:3;touch-action:none;line-height:0;}
+  .overlay .pad{display:inline-block;max-width:90%;padding:0;vertical-align:top;}
+  #headerBlock{top:9%;}
+  #explainBlock{bottom:6%;}
+  .ov-line{margin:0;}
+  .hdr-word{display:inline-block;}
+  #headerText{font-weight:900;letter-spacing:-0.5px;position:relative;z-index:2;line-height:1.02;}
+  #explainText{font-weight:800;line-height:1.25;position:relative;z-index:2;}
+
+  #imgHandle{position:absolute;z-index:4;width:34px;height:34px;border-radius:50%;
+    background:var(--accent);border:2.5px solid #000;display:none;cursor:nwse-resize;touch-action:none;
+    box-shadow:0 2px 10px rgba(0,0,0,.6);}
+  .edit-on #imgHandle{display:block;}
+  .edit-on #bgImg{outline:2px dashed rgba(240,180,41,.75);outline-offset:-1px;cursor:grab;}
+  .edit-on .overlay{outline:1.5px dashed rgba(77,171,247,.65);outline-offset:4px;border-radius:5px;cursor:grab;}
+  .drag-active{outline:2.5px solid var(--accent) !important;}
+
+  .stagebar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--panel);
+    border-top:1px solid var(--border);flex:0 0 auto;}
+  .stagebar .badge{font-size:11px;color:var(--muted);background:var(--panel2);border:1px solid var(--border);
+    padding:6px 10px;border-radius:16px;white-space:nowrap;}
+  .stagebar .sp{flex:1;}
+  .editbtn{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:9px;
+    padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;min-height:42px;}
+  .editbtn.on{background:var(--accent);color:#000;border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(240,180,41,.35);}
+  .zbtn{width:42px;height:42px;border-radius:9px;border:1px solid var(--border);background:var(--panel2);
+    color:var(--text);font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .openPanelBtn{display:none;}
+
+  .panel{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--border);
+    max-height:52vh;display:flex;flex-direction:column;transition:max-height .28s ease;}
+  .panel.collapsed{max-height:56px;}
+  .panelHandle{height:56px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:10px;
+    cursor:pointer;font-weight:700;font-size:14px;position:relative;}
+  .panelHandle::before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    width:44px;height:5px;border-radius:3px;background:var(--border);}
+  .panelHandle .chev{color:var(--muted);transition:transform .28s;}
+  .panel.collapsed .panelHandle .chev{transform:rotate(180deg);}
+  .panelClose{display:none;}
+  .scroll{overflow-y:auto;padding:4px 16px 26px;flex:1;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+
+  .tabs{display:flex;gap:7px;padding:0 16px 10px;overflow-x:auto;flex:0 0 auto;-webkit-overflow-scrolling:touch;}
+  .tabs button{flex:0 0 auto;background:var(--panel2);border:1px solid var(--border);color:var(--muted);
+    padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .tabs button.on{background:var(--accent);color:#000;border-color:var(--accent);}
+  .tabpage{display:none;}
+  .tabpage.on{display:block;}
+
+  label{display:block;font-size:11.5px;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px;}
+  input[type=text],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    border-radius:10px;padding:12px;font-size:16px;font-family:inherit;min-height:var(--tap);}
+  textarea{resize:vertical;min-height:64px;line-height:1.4;}
+  input[type=range]{width:100%;height:var(--tap);accent-color:var(--accent);}
+  input[type=color]{width:var(--tap);height:var(--tap);border:1px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;padding:3px;}
+  .row{display:flex;gap:12px;align-items:center;}
+  .row>*{flex:1;}
+  .val{font-size:12px;color:var(--accent);min-width:46px;text-align:right;flex:0 0 auto;font-weight:700;}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.55;}
+
+  .btn{width:100%;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;
+    color:#fff;background:linear-gradient(135deg,#1971c2,#1098ad);min-height:var(--tap);}
+  .btn:active{filter:brightness(1.15);}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--border);color:var(--text);}
+  .btn.accent{background:linear-gradient(135deg,var(--accent),#e8590c);color:#000;}
+
+  .uploadbox{border:2px dashed var(--border);border-radius:var(--radius);padding:30px 16px;text-align:center;cursor:pointer;}
+  .uploadbox:active{border-color:var(--accent);background:#1a222c;}
+  .uploadbox b{display:block;font-size:14px;margin-bottom:5px;}
+  .uploadbox small{color:var(--muted);font-size:12px;}
+
+  .word-colors{display:flex;flex-wrap:wrap;gap:9px;margin-top:7px;}
+  .word-chip{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);
+    border-radius:26px;padding:5px 14px 5px 5px;font-size:13px;}
+  .word-chip input[type=color]{width:36px;height:36px;border-radius:50%;}
+  .seg{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-wrap:wrap;}
+  .seg button{flex:1 0 30%;background:none;border:none;color:var(--muted);padding:13px 4px;font-size:13px;cursor:pointer;min-height:var(--tap);}
+  .seg button.on{background:var(--accent);color:#000;font-weight:700;}
+
+  .sub{margin-top:16px;padding-top:12px;border-top:1px dashed var(--border);font-size:11px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+
+  .toast{position:fixed;left:50%;top:74px;transform:translateX(-50%) translateY(-10px);
+    background:#1971c2;color:#fff;padding:13px 22px;border-radius:11px;font-size:13px;font-weight:600;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.25s;z-index:999;max-width:90vw;text-align:center;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.err{background:var(--accent2);}
+
+  .panelBackdrop{display:none;}
+
+  @media(max-width:859px){
+    .topbar{position:fixed;top:0;left:0;right:0;
+      padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));
+      background:rgba(22,27,34,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      border-bottom:1px solid rgba(42,51,64,.5);}
+    .topbar h1{font-size:14px;}
+    .topbar .mini{display:none;}
+    .topExport{display:inline-flex;align-items:center;justify-content:center;padding:7px 14px;font-size:14px;}
+
+    .stage{position:fixed;inset:0;display:block;margin:0;background:#0a0d11;}
+    .previewWrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      overflow:hidden;overscroll-behavior:contain;
+      padding-top:calc(56px + env(safe-area-inset-top) + 8px);
+      padding-bottom:calc(84px + env(safe-area-inset-bottom));
+      padding-left:12px;padding-right:12px;}
+
+    .stagebar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));
+      transform:translateX(-50%);z-index:25;
+      display:flex;align-items:center;gap:4px;
+      padding:6px;background:rgba(22,27,34,.92);
+      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      border:1px solid rgba(42,51,64,.8);border-radius:999px;
+      box-shadow:0 10px 32px rgba(0,0,0,.55);transition:opacity .22s;}
+    .stagebar.hidden{opacity:0;pointer-events:none;}
+    .stagebar .badge,.stagebar .sp{display:none;}
+    .editbtn{width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;border:none;
+      background:transparent;color:var(--text);font-size:18px;
+      display:flex;align-items:center;justify-content:center;}
+    .editbtn .edit-lbl{display:none;}
+    .editbtn.on{background:var(--accent);color:#000;box-shadow:0 0 0 3px rgba(240,180,41,.35);}
+    .zbtn{width:44px;height:44px;border-radius:50%;border:none;background:transparent;
+      color:var(--text);font-size:20px;}
+    .zbtn:active{background:rgba(255,255,255,.08);}
+    .openPanelBtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+      height:44px;padding:0 18px;border-radius:22px;border:none;
+      background:linear-gradient(135deg,var(--accent),#e8590c);color:#000;
+      font-weight:800;font-size:13px;cursor:pointer;letter-spacing:.2px;
+      box-shadow:0 3px 12px rgba(240,180,41,.3);}
+    .openPanelBtn:active{filter:brightness(1.1);}
+
+    .panel{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:40;
+      max-height:55vh;height:55vh;
+      border-radius:18px 18px 0 0;border-top:1px solid var(--border);
+      transform:translateY(0);
+      transition:transform .3s cubic-bezier(.2,.9,.3,1);
+      box-shadow:0 -12px 40px rgba(0,0,0,.65);
+      display:flex;flex-direction:column;
+      padding-bottom:env(safe-area-inset-bottom);}
+    .panel.collapsed{max-height:55vh;transform:translateY(105%);}
+    .panelHandle{height:52px;padding:0 16px;justify-content:space-between;
+      border-bottom:1px solid rgba(42,51,64,.6);}
+    .panelHandle::before{display:none;}
+    .panelHandle .chev{display:none;}
+    #panelTitle{font-size:13.5px;letter-spacing:.3px;color:var(--text);}
+    .panelClose{display:flex;align-items:center;justify-content:center;
+      width:40px;height:40px;border:none;background:transparent;color:var(--muted);
+      font-size:20px;cursor:pointer;border-radius:50%;}
+    .panelClose:active{background:rgba(255,255,255,.08);}
+
+    .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+      padding:10px 12px 10px;overflow:visible;flex:0 0 auto;
+      border-bottom:1px solid rgba(42,51,64,.4);}
+    .tabs button{padding:9px 4px;font-size:11px;border-radius:9px;min-height:44px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+    .tabs button.on{box-shadow:0 2px 10px rgba(240,180,41,.3);}
+
+    .scroll{padding:4px 16px calc(28px + env(safe-area-inset-bottom));}
+    label{margin:12px 0 4px;}
+    input[type=range]{height:44px;}
+
+    .panelBackdrop{display:block;position:fixed;inset:0;z-index:39;
+      background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .28s;}
+    .panelBackdrop.show{opacity:1;pointer-events:auto;}
+  }
+  @media(max-width:360px){
+    .tabs{grid-template-columns:repeat(3,1fr);}
+    .openPanelBtn span{display:none;}
+  }
+
+  @media(min-width:860px){
+    body{flex-direction:row-reverse;}
+    .panel{max-height:none !important;width:420px;min-width:420px;border-top:none;border-left:1px solid var(--border);}
+    .panel.collapsed{max-height:none;}
+    .panelHandle{display:none;}
+    .stage{flex:1;margin-top:53px;}
+    .topbar{position:fixed;top:0;left:0;right:420px;}
+    .tabs{padding-top:64px;}
+    .previewWrap{padding:40px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🎨 Overlay Studio</h1>
+  <span class="mini">4K JPG · &lt;500KB</span>
+  <button class="topExport" id="quickExport">⬇️ Save</button>
+</div>
+
+<div class="stage">
+  <div class="previewWrap" id="previewWrap">
+    <div class="canvasHolder" id="canvasHolder">
+      <div id="stageInner">
+        <div id="noimg">Pick an output shape, then upload a photo.<br>It auto-places on the canvas — then move &amp; resize by touch or sliders.</div>
+        <img id="bgImg" style="display:none;" alt="">
+        <div class="overlay" id="headerBlock"><span class="pad" id="headerPad"><div id="headerText"></div></span></div>
+        <div class="overlay" id="explainBlock"><span class="pad" id="explainPad"><p id="explainText"></p></span></div>
+        <div id="imgHandle"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stagebar" id="stagebar">
+    <span class="badge dim" id="dimBadge">No image</span>
+    <button class="editbtn" id="editToggle">✋<span class="edit-lbl"> Edit</span></button>
+    <span class="sp"></span>
+    <button class="zbtn" id="zoomOut">−</button>
+    <span class="badge" id="zoomBadge">Fit</span>
+    <button class="zbtn" id="zoomIn">+</button>
+    <button class="zbtn" id="zoomFit">⛶</button>
+    <button class="openPanelBtn" id="openPanelBtn">⚙️ <span>Edit</span></button>
+  </div>
+</div>
+
+<div class="panelBackdrop" id="panelBackdrop"></div>
+
+<div class="panel collapsed" id="panel">
+  <div class="panelHandle" id="panelHandle">
+    <span id="panelTitle">Edit ▾</span>
+    <span class="chev">▾</span>
+    <button class="panelClose" id="panelClose" aria-label="Close">✕</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="canvas" class="on">📐 Output</button>
+    <button data-tab="image">🖼️ Image</button>
+    <button data-tab="header">🔤 Header</button>
+    <button data-tab="explain">📝 Explain</button>
+    <button data-tab="tbg">🎨 Text BG</button>
+    <button data-tab="grad">🌈 Gradient</button>
+    <button data-tab="fx">✨ Effects</button>
+    <button data-tab="export">⬇️ Export</button>
+  </div>
+
+  <div class="scroll">
+
+    <div class="tabpage on" data-page="canvas">
+      <label>Final output shape</label>
+      <div class="seg" id="ratioSeg">
+        <button data-r="0.5625" class="on">9:16</button>
+        <button data-r="1.777">16:9</button>
+        <button data-r="0.8">4:5</button>
+        <button data-r="1.25">5:4</button>
+        <button data-r="1">1:1</button>
+        <button data-r="0.707">A4 ↕</button>
+        <button data-r="1.414">A4 ↔</button>
+        <button data-r="1.333">4:3</button>
+        <button data-r="0.75">3:4</button>
+      </div>
+      <div class="hint">Sets the canvas and exported aspect ratio. Your photo auto-fits on upload; fine-tune in the Image tab.</div>
+      <label>Canvas background</label>
+      <div class="row">
+        <input type="color" id="canvasBg" value="#0d1b2a">
+        <select id="canvasBgMode" style="flex:2;">
+          <option value="solid">Solid color (picker ←)</option>
+          <option value="grad">Gradient (from Gradient tab)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tabpage" data-page="image">
+      <div class="uploadbox" id="uploadbox">
+        <b>📁 Upload / take a photo</b>
+        <small>Tap here · camera or gallery</small>
+        <input type="file" id="fileInput" accept="image/*" hidden>
+      </div>
+      <div class="hint">Auto-sized & centred on upload. Tap <b>✋ Edit</b> to drag/pinch, or use the sliders.</div>
+      <label>Image size <span id="imgScaleV" class="val"></span></label>
+      <input type="range" id="imgScale" min="10" max="200" step="1" value="100">
+      <label>↔ Horizontal position <span id="imgXV" class="val"></span></label>
+      <input type="range" id="imgX" min="-50" max="150" step="0.5" value="50">
+      <label>↕ Vertical position <span id="imgYV" class="val"></span></label>
+      <input type="range" id="imgY" min="-50" max="150" step="0.5" value="50">
+      <label>Corner radius <span id="imgRadV" class="val"></span></label>
+      <input type="range" id="imgRad" min="0" max="15" step="0.5" value="0">
+      <button class="btn ghost" id="fitCover" style="margin-top:14px;">↔️ Fill canvas (cover)</button>
+      <button class="btn ghost" id="fitContain" style="margin-top:9px;">⬜ Fit whole photo (contain)</button>
+    </div>
+
+    <div class="tabpage" data-page="header">
+      <label>Header text (each line = one line)</label>
+      <textarea id="headerInput">SHARKS
+OUTDATE TREES</textarea>
+      <label>Per-word colors</label>
+      <div class="word-colors" id="wordColors"></div>
+      <label>Font</label>
+      <select id="hdrFont">
+        <option value="'Arial Black',Impact,sans-serif">Arial Black (poster)</option>
+        <option value="Impact,Charcoal,sans-serif">Impact</option>
+        <option value="'Segoe UI',system-ui,sans-serif">Segoe UI</option>
+        <option value="Georgia,serif">Georgia</option>
+        <option value="'Trebuchet MS',sans-serif">Trebuchet MS</option>
+        <option value="Verdana,sans-serif">Verdana</option>
+      </select>
+      <label>Size <span id="hdrSizeV" class="val"></span></label>
+      <input type="range" id="hdrSize" min="3" max="18" step="0.2" value="9.5">
+      <label>Weight <span id="hdrWeightV" class="val"></span></label>
+      <input type="range" id="hdrWeight" min="400" max="900" step="100" value="900">
+      <label>Line height <span id="hdrLHV" class="val"></span></label>
+      <input type="range" id="hdrLH" min="0.8" max="1.6" step="0.02" value="1.02">
+      <label>Word spacing <span id="hdrWSV" class="val"></span></label>
+      <input type="range" id="hdrWS" min="0" max="2" step="0.05" value="1">
+      <label>Letter spacing <span id="hdrLSV" class="val"></span></label>
+      <input type="range" id="hdrLS" min="-3" max="8" step="0.2" value="-0.5">
+      <div class="sub">Position</div>
+      <label>↕ Vertical position <span id="hdrTopV" class="val"></span></label>
+      <input type="range" id="hdrTop" min="0" max="92" step="0.5" value="9">
+      <label>↔ Horizontal position <span id="hdrXV" class="val"></span></label>
+      <input type="range" id="hdrX" min="-45" max="45" step="0.5" value="0">
+    </div>
+
+    <div class="tabpage" data-page="explain">
+      <label>Body text — wrap highlights in [[ ]]</label>
+      <textarea id="explainInput">Shark-like scales date to [[450 million]] years ago; the first trees to about [[385 million]].</textarea>
+      <div class="hint">Text inside <code>[[ ]]</code> uses the highlight color.</div>
+      <div class="row">
+        <div><label>Base color</label><input type="color" id="expBase" value="#ffffff"></div>
+        <div><label>Highlight</label><input type="color" id="expHL" value="#f0b429"></div>
+      </div>
+      <label>Size <span id="expSizeV" class="val"></span></label>
+      <input type="range" id="expSize" min="1.2" max="6" step="0.1" value="3">
+      <label>Weight <span id="expWeightV" class="val"></span></label>
+      <input type="range" id="expWeight" min="400" max="900" step="100" value="800">
+      <label>Line height <span id="expLHV" class="val"></span></label>
+      <input type="range" id="expLH" min="1" max="2" step="0.02" value="1.25">
+      <label>Word spacing <span id="expWSV" class="val"></span></label>
+      <input type="range" id="expWS" min="0" max="2" step="0.05" value="1">
+      <div class="sub">Position</div>
+      <label>↕ Vertical position (from bottom) <span id="expBotV" class="val"></span></label>
+      <input type="range" id="expBot" min="0" max="92" step="0.5" value="6">
+      <label>↔ Horizontal position <span id="expXV" class="val"></span></label>
+      <input type="range" id="expX" min="-45" max="45" step="0.5" value="0">
+    </div>
+
+    <div class="tabpage" data-page="tbg">
+      <label>Text block background</label>
+      <div class="seg" id="tbgTarget">
+        <button data-t="none" class="on">Off</button>
+        <button data-t="header">Header</button>
+        <button data-t="explain">Explain</button>
+        <button data-t="both">Both</button>
+      </div>
+      <div class="hint">Gradient panel <b>behind the text</b> for readability over busy photos.</div>
+      <div class="row">
+        <div><label>Color A</label><input type="color" id="tbgA" value="#000000"></div>
+        <div><label>Color B</label><input type="color" id="tbgB" value="#000000"></div>
+      </div>
+      <label>Opacity (transparency) <span id="tbgOpV" class="val"></span></label>
+      <input type="range" id="tbgOp" min="0" max="100" step="2" value="55">
+      <label>Direction</label>
+      <select id="tbgDir">
+        <option value="to bottom">Top → Bottom</option>
+        <option value="to top">Bottom → Top</option>
+        <option value="to right">Left → Right</option>
+        <option value="135deg">Diagonal</option>
+        <option value="radial">Radial (center glow)</option>
+      </select>
+      <label>Fade edges <span id="tbgFadeV" class="val"></span></label>
+      <input type="range" id="tbgFade" min="0" max="100" step="5" value="0">
+      <label>Block padding <span id="tbgPadV" class="val"></span></label>
+      <input type="range" id="tbgPad" min="0" max="12" step="0.5" value="3">
+      <label>Corner radius <span id="tbgRadV" class="val"></span></label>
+      <input type="range" id="tbgRad" min="0" max="40" step="1" value="0">
+    </div>
+
+    <div class="tabpage" data-page="grad">
+      <label>Gradient fill on TEXT</label>
+      <div class="seg" id="gradTarget">
+        <button data-t="none" class="on">Off</button>
+        <button data-t="header">Header</button>
+        <button data-t="explain">Explain</button>
+        <button data-t="both">Both</button>
+        <button data-t="canvas">Canvas bg</button>
+      </div>
+      <label>Preset</label>
+      <select id="gradPreset">
+        <option value="#f0b429,#e03131">Gold → Red</option>
+        <option value="#4dabf7,#1098ad">Sky → Teal</option>
+        <option value="#f783ac,#7048e8">Pink → Violet</option>
+        <option value="#ffd43b,#fa5252">Sun → Fire</option>
+        <option value="#69db7c,#099268">Mint → Green</option>
+        <option value="#0d1b2a,#1b3a5b">Navy depths</option>
+        <option value="#ffffff,#adb5bd">White → Silver</option>
+        <option value="custom">Custom…</option>
+      </select>
+      <div class="row" id="gradCustom" style="display:none;">
+        <div><label>From</label><input type="color" id="gradC1" value="#f0b429"></div>
+        <div><label>To</label><input type="color" id="gradC2" value="#e03131"></div>
+      </div>
+      <label>Angle <span id="gradAngV" class="val"></span></label>
+      <input type="range" id="gradAng" min="0" max="360" step="5" value="90">
+      <div class="hint">“Canvas bg” uses this gradient as the canvas background.</div>
+    </div>
+
+    <div class="tabpage" data-page="fx">
+      <label>Shadow strength <span id="shStrV" class="val"></span></label>
+      <input type="range" id="shStr" min="0" max="40" step="1" value="14">
+      <div class="row">
+        <div><label>Shadow color</label><input type="color" id="shCol" value="#000000"></div>
+        <div><label>Shadow opacity <span id="shOpV" class="val"></span></label>
+          <input type="range" id="shOp" min="0" max="100" step="5" value="75"></div>
+      </div>
+      <label>Outline width <span id="olWV" class="val"></span></label>
+      <input type="range" id="olW" min="0" max="12" step="0.5" value="0">
+      <label>Outline color</label>
+      <input type="color" id="olCol" value="#000000">
+    </div>
+
+    <div class="tabpage" data-page="export">
+      <label>Target long edge</label>
+      <select id="expLongEdge">
+        <option value="3840">4K — 3840 px</option>
+        <option value="2160">2.5K — 2160 px</option>
+        <option value="1600">HD — 1600 px</option>
+      </select>
+      <label>Max file size <span id="expKbV" class="val"></span></label>
+      <input type="range" id="expKb" min="150" max="500" step="10" value="490">
+      <div class="hint">Exports JPG at the chosen resolution, then auto-tunes quality to land under the size limit — full detail kept, so zoom stays sharp.</div>
+      <button class="btn accent" id="exportBtn" style="margin-top:16px;">⬇️ Export JPG</button>
+      <button class="btn ghost" id="resetBtn" style="margin-top:10px;">Reset</button>
+      <div id="exportInfo" class="hint" style="margin-top:10px;"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const stageInner=$('stageInner'), canvasHolder=$('canvasHolder'), bgImg=$('bgImg'), noimg=$('noimg'), imgHandle=$('imgHandle');
+const headerBlock=$('headerBlock'), headerText=$('headerText'), headerPad=$('headerPad');
+const explainBlock=$('explainBlock'), explainText=$('explainText'), explainPad=$('explainPad');
+let imgNaturalW=0, imgNaturalH=0, hasImage=false;
+let currentZoom=null;
+let wordColors=['#f0b429','#ffffff','#e03131'];
+let gradTargetVal='none', tbgTargetVal='none';
+let ratio=0.5625, canvasW=1080, canvasH=1920, editMode=false;
+
+const isMobile = () => window.matchMedia('(max-width:859px)').matches;
+
+let _renderScheduled=false;
+function scheduleRender(){
+  if(_renderScheduled) return;
+  _renderScheduled=true;
+  requestAnimationFrame(()=>{_renderScheduled=false;render();});
+}
+
+/* ---------- panel ---------- */
+function openPanel(){
+  if(!isMobile()) return;
+  $('panel').classList.remove('collapsed');
+  $('panelBackdrop').classList.add('show');
+  $('stagebar').classList.add('hidden');
+}
+function closePanel(){
+  if(!isMobile()) return;
+  $('panel').classList.add('collapsed');
+  $('panelBackdrop').classList.remove('show');
+  $('stagebar').classList.remove('hidden');
+  if(currentZoom===null) applyZoom();
+}
+$('openPanelBtn').onclick = openPanel;
+$('panelClose').onclick = (e)=>{ e.stopPropagation(); closePanel(); };
+$('panelBackdrop').onclick = closePanel;
+$('panelHandle').onclick = ()=>{
+  if(isMobile()) closePanel();
+  else{
+    const p=$('panel'); p.classList.toggle('collapsed');
+    $('panelTitle').textContent=p.classList.contains('collapsed')?'Edit ▴':'Edit ▾';
+    if(currentZoom===null) setTimeout(applyZoom,300);
+  }
+};
+
+$('tabs').querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>{
+    $('tabs').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on',p.dataset.page===b.dataset.tab));
+    if(!isMobile()){ $('panel').classList.remove('collapsed'); $('panelTitle').textContent='Edit ▾'; }
+  };
+});
+
+/* ---------- ratio ---------- */
+$('ratioSeg').querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>{
+    $('ratioSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); ratio=parseFloat(b.dataset.r);
+    recomputeCanvas(); updateImgScaleMax();
+    if(hasImage) autoPlaceImage();
+    render();
+  };
+});
+['canvasBg','canvasBgMode'].forEach(id=>$(id).addEventListener('input',scheduleRender));
+
+function recomputeCanvas(){
+  if(ratio>=1){ canvasW=Math.max(imgNaturalW||1600,1600); canvasH=Math.round(canvasW/ratio); }
+  else { canvasH=Math.max(imgNaturalH||1600,1600); canvasW=Math.round(canvasH*ratio); }
+}
+function updateImgScaleMax(){
+  if(!imgNaturalW) return;
+  const ir=imgNaturalW/imgNaturalH;
+  const coverW=Math.max(canvasW, canvasH*ir);
+  const needed=Math.ceil(coverW/canvasW*100)+5;
+  const newMax=Math.max(200, needed);
+  if(+$('imgScale').max !== newMax) $('imgScale').max=newMax;
+}
+
+$('editToggle').onclick=()=>{
+  editMode=!editMode;
+  $('editToggle').classList.toggle('on',editMode);
+  stageInner.classList.toggle('edit-on',editMode && hasImage);
+  positionHandle();
+};
+
+/* ---------- upload ---------- */
+const fileInput=$('fileInput'), uploadbox=$('uploadbox');
+uploadbox.onclick=()=>fileInput.click();
+fileInput.onchange=e=>{if(e.target.files[0])loadFile(e.target.files[0]);};
+function loadFile(file){
+  if(!file.type.startsWith('image/')){toast('Choose an image file',true);return;}
+  const r=new FileReader();
+  r.onload=ev=>{
+    const im=new Image();
+    im.onload=()=>{
+      imgNaturalW=im.naturalWidth; imgNaturalH=im.naturalHeight;
+      bgImg.src=ev.target.result; bgImg.style.display='block'; noimg.style.display='none';
+      hasImage=true;
+      $('dimBadge').textContent=imgNaturalW+' × '+imgNaturalH;
+      uploadbox.querySelector('b').textContent='✅ Loaded — tap to change';
+      currentZoom=null; recomputeCanvas(); updateImgScaleMax(); autoPlaceImage();
+      render();
+      toast('Auto-placed — tap ✋ Edit to move/resize');
+      if(isMobile()) setTimeout(closePanel, 400);
+    };
+    im.src=ev.target.result;
+  };
+  r.readAsDataURL(file);
+}
+
+function autoPlaceImage(){
+  if(!imgNaturalW) return;
+  const imgRatio=imgNaturalW/imgNaturalH, canRatio=canvasW/canvasH;
+  let scalePct;
+  const orientMatch=(imgRatio>=1)===(canRatio>=1);
+  if(orientMatch){ const coverW=Math.max(canvasW,canvasH*imgRatio); scalePct=coverW/canvasW*100; }
+  else{ const containW=Math.min(canvasW,canvasH*imgRatio); scalePct=containW/canvasW*100*0.96; }
+  $('imgScale').value=Math.round(Math.min(+$('imgScale').max,Math.max(10,scalePct)));
+  $('imgX').value=50; $('imgY').value=50;
+}
+$('fitCover').onclick=()=>{ if(!hasImage)return;
+  updateImgScaleMax();
+  const ir=imgNaturalW/imgNaturalH, coverW=Math.max(canvasW,canvasH*ir);
+  $('imgScale').value=Math.round(coverW/canvasW*100); $('imgX').value=50; $('imgY').value=50; render(); };
+$('fitContain').onclick=()=>{ if(!hasImage)return;
+  const ir=imgNaturalW/imgNaturalH, containW=Math.min(canvasW,canvasH*ir);
+  $('imgScale').value=Math.round(containW/canvasW*100); $('imgX').value=50; $('imgY').value=50; render(); };
+['imgScale','imgX','imgY','imgRad'].forEach(id=>$(id).addEventListener('input',scheduleRender));
+
+/* ---------- helpers ---------- */
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function getWords(){return $('headerInput').value.split(/\n/).map(l=>l.split(/\s+/).filter(Boolean));}
+function flatWords(){return getWords().flat();}
+function hexToRgba(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
+
+function buildWordColorUI(){
+  const words=flatWords(), wrap=$('wordColors'); wrap.innerHTML='';
+  words.forEach((w,i)=>{
+    if(wordColors[i]===undefined) wordColors[i]=wordColors[i-1]||'#ffffff';
+    const chip=document.createElement('div'); chip.className='word-chip';
+    const c=document.createElement('input'); c.type='color'; c.value=wordColors[i];
+    c.oninput=()=>{wordColors[i]=c.value;scheduleRender();};
+    const lbl=document.createElement('span'); lbl.textContent=w.length>12?w.slice(0,12)+'…':w;
+    chip.appendChild(c); chip.appendChild(lbl); wrap.appendChild(chip);
+  });
+}
+
+function gradientCSS(){
+  let g=$('gradPreset').value,c1,c2;
+  if(g==='custom'){c1=$('gradC1').value;c2=$('gradC2').value;}else{[c1,c2]=g.split(',');}
+  return `linear-gradient(${$('gradAng').value}deg, ${c1}, ${c2})`;
+}
+function applyGradient(el){el.style.background=gradientCSS();el.style.webkitBackgroundClip='text';
+  el.style.backgroundClip='text';el.style.webkitTextFillColor='transparent';el.style.color='transparent';}
+function clearGradient(el){el.style.background='none';el.style.webkitTextFillColor='';
+  el.style.backgroundClip='';el.style.webkitBackgroundClip='';}
+
+function tbgCSS(){
+  const op=(+$('tbgOp').value)/100;
+  const cA=hexToRgba($('tbgA').value,op), cB=hexToRgba($('tbgB').value,op);
+  const dir=$('tbgDir').value;
+  if(dir==='radial') return `radial-gradient(ellipse at center, ${cA}, ${cB})`;
+  return `linear-gradient(${dir}, ${cA}, ${cB})`;
+}
+function applyTbg(padEl){
+  padEl.style.background=tbgCSS();
+  padEl.style.padding=$('tbgPad').value+'% 5%';
+  padEl.style.borderRadius=$('tbgRad').value+'px';
+  const fade=+$('tbgFade').value;
+  if(fade>0){const m=`radial-gradient(ellipse at center, #000 ${100-fade}%, transparent 100%)`;
+    padEl.style.webkitMaskImage=m; padEl.style.maskImage=m;}
+  else{padEl.style.webkitMaskImage='';padEl.style.maskImage='';}
+}
+function clearTbg(padEl){padEl.style.background='none';padEl.style.padding='0';
+  padEl.style.borderRadius='0';padEl.style.webkitMaskImage='';padEl.style.maskImage='';}
+
+function textShadow(){
+  const str=+$('shStr').value; if(str===0)return 'none';
+  const op=(+$('shOp').value)/100, col=hexToRgba($('shCol').value,op);
+  return `0 ${str*0.12}px ${str*0.18}px ${col}, 0 0 ${str*0.4}px ${col}`;
+}
+function outlineCSS(){const w=+$('olW').value; return w===0?'':w+'px '+$('olCol').value;}
+
+/* ---------- render ---------- */
+function render(){
+  if($('canvasBgMode').value==='grad') stageInner.style.background=gradientCSS();
+  else stageInner.style.background=$('canvasBg').value;
+
+  if(hasImage){
+    const scale=(+$('imgScale').value)/100;
+    const iw=canvasW*scale, ih=iw*(imgNaturalH/imgNaturalW);
+    const xPct=(+$('imgX').value)/100, yPct=(+$('imgY').value)/100;
+    const left=(canvasW-iw)*xPct, top=(canvasH-ih)*yPct;
+    bgImg.style.width=iw+'px'; bgImg.style.height=ih+'px';
+    bgImg.style.left=left+'px'; bgImg.style.top=top+'px';
+    bgImg.style.borderRadius=((+$('imgRad').value)/100*canvasW)+'px';
+  }
+
+  const unit=canvasW/100;
+  const lines=getWords(), hdrFont=$('hdrFont').value;
+  headerText.style.fontFamily=hdrFont;
+  headerText.style.fontWeight=$('hdrWeight').value;
+  headerText.style.letterSpacing=(+$('hdrLS').value*unit)+'px';
+  headerText.style.lineHeight=$('hdrLH').value;
+  headerText.style.fontSize=((+$('hdrSize').value)*unit)+'px';
+  headerText.style.wordSpacing=(((+$('hdrWS').value)-1)*0.3*((+$('hdrSize').value)*unit))+'px';
+  headerBlock.style.top=$('hdrTop').value+'%';
+  headerBlock.style.transform='translateX('+$('hdrX').value+'%)';
+  let wi=0,html='';
+  lines.forEach(line=>{html+='<div class="ov-line">';
+    line.forEach((w,idx)=>{const col=wordColors[wi]||'#ffffff';
+      html+=`<span class="hdr-word" style="color:${col}">${escapeHtml(w)}</span>`+(idx<line.length-1?' ':'');wi++;});
+    html+='</div>';});
+  headerText.innerHTML=html;
+
+  explainText.style.fontFamily=hdrFont;
+  explainText.style.fontWeight=$('expWeight').value;
+  explainText.style.lineHeight=$('expLH').value;
+  explainText.style.fontSize=((+$('expSize').value)*unit)+'px';
+  explainText.style.wordSpacing=(((+$('expWS').value)-1)*0.3*((+$('expSize').value)*unit))+'px';
+  explainText.style.color=$('expBase').value;
+  explainBlock.style.bottom=$('expBot').value+'%';
+  explainBlock.style.transform='translateX('+$('expX').value+'%)';
+  explainText.innerHTML=escapeHtml($('explainInput').value)
+    .replace(/\[\[(.+?)\]\]/g,`<span style="color:${$('expHL').value}">$1</span>`);
+
+  clearTbg(headerPad); clearTbg(explainPad);
+  if(tbgTargetVal==='header'||tbgTargetVal==='both') applyTbg(headerPad);
+  if(tbgTargetVal==='explain'||tbgTargetVal==='both') applyTbg(explainPad);
+
+  const sh=textShadow(), ol=outlineCSS();
+  [headerText,explainText].forEach(el=>{el.style.textShadow=sh;el.style.webkitTextStroke=ol||'';});
+
+  clearGradient(headerText); clearGradient(explainText);
+  if(gradTargetVal==='header'||gradTargetVal==='both'){
+    headerText.querySelectorAll('.hdr-word').forEach(s=>s.style.color=''); applyGradient(headerText);}
+  if(gradTargetVal==='explain'||gradTargetVal==='both'){
+    explainText.querySelectorAll('span').forEach(s=>s.style.color=''); applyGradient(explainText);}
+
+  applyZoom();
+  positionHandle(); updateValLabels();
+}
+
+/* ---------- zoom (with real content area) ---------- */
+const previewWrap=$('previewWrap');
+function computeFitScale(){
+  const cs=getComputedStyle(previewWrap);
+  const pL=parseFloat(cs.paddingLeft)||0, pR=parseFloat(cs.paddingRight)||0;
+  const pT=parseFloat(cs.paddingTop)||0,  pB=parseFloat(cs.paddingBottom)||0;
+  const availW=Math.max(100, previewWrap.clientWidth - pL - pR);
+  const availH=Math.max(100, previewWrap.clientHeight - pT - pB);
+  return Math.max(0.04, Math.min(availW/canvasW, availH/canvasH));
+}
+function applyZoom(){
+  const r = currentZoom===null ? computeFitScale() : currentZoom;
+  canvasHolder.style.width  = (canvasW*r)+'px';
+  canvasHolder.style.height = (canvasH*r)+'px';
+  stageInner.style.width  = canvasW+'px';
+  stageInner.style.height = canvasH+'px';
+  stageInner.style.transform='scale('+r+')';
+  $('zoomBadge').textContent = (currentZoom===null?'Fit ':'')+Math.round(r*100)+'%';
+}
+function fitZoom(){ currentZoom=null; applyZoom(); }
+function setZoom(z){ currentZoom=z; applyZoom(); }
+$('zoomIn').onclick=()=>{const cur=currentZoom||computeFitScale();setZoom(Math.min(cur*1.25,6));};
+$('zoomOut').onclick=()=>{const cur=currentZoom||computeFitScale();setZoom(Math.max(cur/1.25,0.04));};
+$('zoomFit').onclick=fitZoom;
+window.addEventListener('resize',()=>{ if(currentZoom===null) applyZoom(); });
+window.addEventListener('orientationchange',()=>setTimeout(()=>{ if(currentZoom===null) applyZoom(); },300));
+
+function positionHandle(){
+  if(!editMode||!hasImage){imgHandle.style.display='none';return;}
+  imgHandle.style.display='block';
+  const scale=(+$('imgScale').value)/100;
+  const iw=canvasW*scale, ih=iw*(imgNaturalH/imgNaturalW);
+  const xPct=(+$('imgX').value)/100, yPct=(+$('imgY').value)/100;
+  const left=(canvasW-iw)*xPct, top=(canvasH-ih)*yPct;
+  imgHandle.style.left=(left+iw-17)+'px';
+  imgHandle.style.top=(top+ih-17)+'px';
+}
+
+function updateValLabels(){
+  $('hdrSizeV').textContent=$('hdrSize').value+'%';
+  $('hdrWeightV').textContent=$('hdrWeight').value;
+  $('hdrLHV').textContent=$('hdrLH').value;
+  $('hdrWSV').textContent=$('hdrWS').value+'×';
+  $('hdrLSV').textContent=$('hdrLS').value;
+  $('hdrTopV').textContent=$('hdrTop').value+'%';
+  $('hdrXV').textContent=$('hdrX').value+'%';
+  $('expSizeV').textContent=$('expSize').value+'%';
+  $('expWeightV').textContent=$('expWeight').value;
+  $('expLHV').textContent=$('expLH').value;
+  $('expWSV').textContent=$('expWS').value+'×';
+  $('expBotV').textContent=$('expBot').value+'%';
+  $('expXV').textContent=$('expX').value+'%';
+  $('gradAngV').textContent=$('gradAng').value+'°';
+  $('shStrV').textContent=$('shStr').value;
+  $('shOpV').textContent=$('shOp').value+'%';
+  $('olWV').textContent=$('olW').value+'px';
+  $('expKbV').textContent=$('expKb').value+' KB';
+  $('imgScaleV').textContent=$('imgScale').value+'%';
+  $('imgXV').textContent=$('imgX').value+'%';
+  $('imgYV').textContent=$('imgY').value+'%';
+  $('imgRadV').textContent=$('imgRad').value;
+  $('tbgOpV').textContent=$('tbgOp').value+'%';
+  $('tbgFadeV').textContent=$('tbgFade').value+'%';
+  $('tbgPadV').textContent=$('tbgPad').value;
+  $('tbgRadV').textContent=$('tbgRad').value+'px';
+}
+
+['hdrFont','hdrSize','hdrWeight','hdrLH','hdrWS','hdrLS','hdrTop','hdrX',
+ 'expBase','expHL','expSize','expWeight','expLH','expWS','expBot','expX',
+ 'gradPreset','gradAng','gradC1','gradC2',
+ 'tbgA','tbgB','tbgOp','tbgDir','tbgFade','tbgPad','tbgRad',
+ 'shStr','shCol','shOp','olW','olCol','explainInput','expKb','expLongEdge'
+].forEach(id=>{const el=$(id);if(el)el.addEventListener('input',scheduleRender);});
+$('headerInput').addEventListener('input',()=>{buildWordColorUI();scheduleRender();});
+
+$('gradTarget').querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>{$('gradTarget').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');gradTargetVal=b.dataset.t;
+    if(gradTargetVal==='canvas'){$('canvasBgMode').value='grad';}
+    render();};});
+$('tbgTarget').querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>{$('tbgTarget').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');tbgTargetVal=b.dataset.t;render();};});
+$('gradPreset').addEventListener('change',()=>{
+  $('gradCustom').style.display=$('gradPreset').value==='custom'?'flex':'none';render();});
+
+/* ---------- drag / resize ---------- */
+function curScale(){const m=stageInner.style.transform.match(/scale\(([\d.]+)\)/);return m?parseFloat(m[1]):1;}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+function dragHandler(el, onMove, opts){
+  opts=opts||{};
+  let lastX,lastY;
+  function down(e){
+    if(!editMode) return;
+    if(opts.needImage && !hasImage) return;
+    if(e.touches && e.touches.length>1) return;
+    e.preventDefault(); e.stopPropagation();
+    const p=e.touches?e.touches[0]:e; lastX=p.clientX; lastY=p.clientY;
+    el.classList.add('drag-active');
+    window.addEventListener('mousemove',move,{passive:false});
+    window.addEventListener('touchmove',move,{passive:false});
+    window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+  }
+  function move(e){
+    const p=e.touches?e.touches[0]:e; const s=curScale()||1;
+    const dx=(p.clientX-lastX)/s, dy=(p.clientY-lastY)/s;
+    lastX=p.clientX; lastY=p.clientY; e.preventDefault(); onMove(dx,dy);
+  }
+  function up(){el.classList.remove('drag-active');
+    window.removeEventListener('mousemove',move);window.removeEventListener('touchmove',move);
+    window.removeEventListener('mouseup',up);window.removeEventListener('touchend',up);}
+  el.addEventListener('mousedown',down); el.addEventListener('touchstart',down,{passive:false});
+}
+
+dragHandler(bgImg,(dx,dy)=>{
+  const scale=(+$('imgScale').value)/100;
+  const iw=canvasW*scale, ih=iw*(imgNaturalH/imgNaturalW);
+  const freeW=(canvasW-iw)||1, freeH=(canvasH-ih)||1;
+  $('imgX').value=clamp((+$('imgX').value)+dx/freeW*100,-50,150).toFixed(1);
+  $('imgY').value=clamp((+$('imgY').value)+dy/freeH*100,-50,150).toFixed(1);
+  scheduleRender();
+},{needImage:true});
+
+dragHandler(imgHandle,(dx)=>{
+  $('imgScale').value=clamp((+$('imgScale').value)+(dx/canvasW*100)*1.6,10,+$('imgScale').max).toFixed(0);
+  scheduleRender();
+},{needImage:true});
+
+dragHandler(headerBlock,(dx,dy)=>{
+  $('hdrTop').value=clamp(parseFloat($('hdrTop').value)+dy/canvasH*100,0,92).toFixed(1);
+  $('hdrX').value=clamp(parseFloat($('hdrX').value)+dx/canvasW*100,-45,45).toFixed(1);
+  scheduleRender();
+});
+
+dragHandler(explainBlock,(dx,dy)=>{
+  $('expBot').value=clamp(parseFloat($('expBot').value)-dy/canvasH*100,0,92).toFixed(1);
+  $('expX').value=clamp(parseFloat($('expX').value)+dx/canvasW*100,-45,45).toFixed(1);
+  scheduleRender();
+});
+
+let pinchStart=null;
+bgImg.addEventListener('touchstart',e=>{
+  if(editMode&&e.touches.length===2){
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    pinchStart={dist:Math.hypot(dx,dy),scale:+$('imgScale').value};}
+},{passive:false});
+bgImg.addEventListener('touchmove',e=>{
+  if(editMode&&pinchStart&&e.touches.length===2){e.preventDefault();
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    $('imgScale').value=clamp(pinchStart.scale*(Math.hypot(dx,dy)/pinchStart.dist),10,+$('imgScale').max).toFixed(0);
+    scheduleRender();}
+},{passive:false});
+bgImg.addEventListener('touchend',()=>{pinchStart=null;});
+
+/* ---------- export ---------- */
+function toBlob(c,q){return new Promise(res=>c.toBlob(res,'image/jpeg',q));}
+function parseGradStops(){let g=$('gradPreset').value,c1,c2;
+  if(g==='custom'){c1=$('gradC1').value;c2=$('gradC2').value;}else{[c1,c2]=g.split(',');}return [c1,c2];}
+function makeCanvasGradient(ctx,x,y,w,h,angleDeg,c1,c2){
+  const a=angleDeg*Math.PI/180, cx=x+w/2, cy=y+h/2;
+  const len=(Math.abs(Math.cos(a))*w+Math.abs(Math.sin(a))*h)/2;
+  const g=ctx.createLinearGradient(cx-Math.cos(a)*len,cy-Math.sin(a)*len,cx+Math.cos(a)*len,cy+Math.sin(a)*len);
+  g.addColorStop(0,c1); g.addColorStop(1,c2); return g;}
+function roundRectPath(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+function drawTextBlock(ctx, kind, outW, outH, S){
+  const unit=canvasW/100*S;
+  let fontPx, weight, lineH, letterSpace, wordSpace, font=$('hdrFont').value, gradActive=false;
+  if(kind==='header'){
+    fontPx=(+$('hdrSize').value)*unit; weight=$('hdrWeight').value; lineH=parseFloat($('hdrLH').value);
+    letterSpace=(+$('hdrLS').value)*unit; wordSpace=((+$('hdrWS').value)-1)*0.3*fontPx;
+    gradActive=(gradTargetVal==='header'||gradTargetVal==='both');
+  }else{
+    fontPx=(+$('expSize').value)*unit; weight=$('expWeight').value; lineH=parseFloat($('expLH').value);
+    letterSpace=0; wordSpace=((+$('expWS').value)-1)*0.3*fontPx;
+    gradActive=(gradTargetVal==='explain'||gradTargetVal==='both');
+  }
+
+  ctx.save();
+  ctx.textBaseline='top';
+  ctx.textAlign='left';
+  ctx.font=`${weight} ${fontPx}px ${font}`;
+
+  const letterSpaceForSpace = letterSpace;  // letter-spacing applies to spaces in CSS too
+  const baseSpaceW = ctx.measureText(' ').width + letterSpaceForSpace + wordSpace;
+
+  function measureRun(txt){
+    let w=0; for(let i=0;i<txt.length;i++) w+=ctx.measureText(txt[i]).width+letterSpace;
+    return w;
+  }
+
+  // Build runs
+  let srcLines=[];
+  if(kind==='header'){
+    let wi=0;
+    getWords().forEach(line=>{
+      let runs=[];
+      line.forEach((w,idx)=>{
+        runs.push({text:w+(idx<line.length-1?' ':''), color:(wordColors[wi]||'#ffffff')});
+        wi++;
+      });
+      srcLines.push(runs);
+    });
+  }else{
+    const base=$('expBase').value, hl=$('expHL').value;
+    $('explainInput').value.split(/\n/).forEach(raw=>{
+      let runs=[]; let re=/\[\[(.+?)\]\]/g; let last=0,m;
+      while((m=re.exec(raw))!==null){
+        if(m.index>last) runs.push({text:raw.slice(last,m.index),color:base});
+        runs.push({text:m[1],color:hl}); last=re.lastIndex;
+      }
+      if(last<raw.length) runs.push({text:raw.slice(last),color:base});
+      if(runs.length===0) runs.push({text:'',color:base});
+      srcLines.push(runs);
+    });
+  }
+
+  function tokenise(runs){
+    let toks=[];
+    runs.forEach(r=>{
+      const parts=r.text.split(/(\s+)/);
+      parts.forEach(p=>{
+        if(p==='') return;
+        if(/^\s+$/.test(p)){ if(toks.length) toks[toks.length-1].space=true; }
+        else toks.push({text:p,color:r.color,space:false});
+      });
+    });
+    return toks;
+  }
+  function wordW(t){ return measureRun(t.text) + (t.space?baseSpaceW:0); }
+
+  const maxW = outW * 0.90;
+  let lines=[];
+  srcLines.forEach(runs=>{
+    const toks=tokenise(runs);
+    if(toks.length===0){lines.push([]);return;}
+    let cur=[], curW=0;
+    toks.forEach(t=>{
+      const w=wordW(t);
+      if(curW+w>maxW && cur.length){ lines.push(cur); cur=[]; curW=0; }
+      cur.push(t); curW+=w;
+    });
+    if(cur.length) lines.push(cur);
+  });
+
+  function lineWidth(toks){
+    let w=0;
+    toks.forEach((t,i)=>{
+      w+=measureRun(t.text);
+      if(t.space && i<toks.length-1) w+=baseSpaceW;
+    });
+    return w;
+  }
+
+  const lineStep = fontPx * lineH;
+  const totalH   = lineStep * lines.length;
+  const halfLeading = (lineH - 1) * fontPx / 2;
+
+  // Text-block padding (only when tbg is on, matching preview's .pad padding)
+  const tbgOn = (tbgTargetVal==='both') || (tbgTargetVal===kind);
+  const padY  = (+$('tbgPad').value)/100 * outW;   // = % of width
+  const padX  = outW * 0.05;
+  const padTopOut = tbgOn ? padY : 0;
+  const padBotOut = tbgOn ? padY : 0;
+
+  // Where the TEXT CONTENT box lives (top of first line box)
+  let textContentTop;
+  if(kind==='header'){
+    textContentTop = outH * (parseFloat($('hdrTop').value)/100) + padTopOut;
+  }else{
+    const textContentBottom = outH - outH*(parseFloat($('expBot').value)/100) - padBotOut;
+    textContentTop = textContentBottom - totalH;
+  }
+
+  const xoff = (kind==='header'?parseFloat($('hdrX').value):parseFloat($('expX').value))/100 * outW;
+
+  /* ---- Text-background panel ---- */
+  if(tbgOn && lines.length){
+    let maxLW=0; lines.forEach(t=>maxLW=Math.max(maxLW,lineWidth(t)));
+    const bx = (outW - maxLW)/2 - padX + xoff;
+    const by = textContentTop - padY;
+    const bw = maxLW + padX*2;
+    const bh = totalH + padY*2;
+    const rad = (+$('tbgRad').value) * S;
+    const fade = +$('tbgFade').value;
+    const dir = $('tbgDir').value;
+    const cA = hexToRgba($('tbgA').value,(+$('tbgOp').value)/100);
+    const cB = hexToRgba($('tbgB').value,(+$('tbgOp').value)/100);
+
+    function paintRect(c, w, h){
+      let grad;
+      if(dir==='radial'){
+        grad=c.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.max(w,h)/2);
+        grad.addColorStop(0,cA); grad.addColorStop(1,cB);
+      }else{
+        let ang=90;
+        if(dir==='to top') ang=270; else if(dir==='to right') ang=0; else if(dir==='135deg') ang=135;
+        grad=makeCanvasGradient(c,0,0,w,h,ang,cA,cB);
+      }
+      roundRectPath(c,0,0,w,h,rad); c.fillStyle=grad; c.fill();
+    }
+
+    if(bw>0 && bh>0){
+      if(fade>0){
+        const tmp=document.createElement('canvas');
+        tmp.width=Math.max(1,Math.ceil(bw)); tmp.height=Math.max(1,Math.ceil(bh));
+        const tctx=tmp.getContext('2d');
+        paintRect(tctx, tmp.width, tmp.height);
+        tctx.globalCompositeOperation='destination-in';
+        const R=Math.hypot(bw,bh)/2;
+        const mg=tctx.createRadialGradient(bw/2,bh/2,R*(1-fade/100),bw/2,bh/2,R);
+        mg.addColorStop(0,'rgba(0,0,0,1)');
+        mg.addColorStop(1,'rgba(0,0,0,0)');
+        tctx.fillStyle=mg;
+        tctx.fillRect(0,0,tmp.width,tmp.height);
+        ctx.drawImage(tmp, bx, by);
+      }else{
+        ctx.save(); ctx.translate(bx,by); paintRect(ctx, bw, bh); ctx.restore();
+      }
+    }
+  }
+
+  /* ---- Text ---- */
+  const shStr=+$('shStr').value;
+  function setShadow(){
+    if(shStr>0){
+      ctx.shadowColor=hexToRgba($('shCol').value,(+$('shOp').value)/100);
+      ctx.shadowBlur=shStr*0.4*S;
+      ctx.shadowOffsetX=0;
+      ctx.shadowOffsetY=shStr*0.12*S;
+    }else{
+      ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+    }
+  }
+  const olW=(+$('olW').value)*S;
+  let textGrad=null;
+  if(gradActive){
+    const [c1,c2]=parseGradStops();
+    textGrad=makeCanvasGradient(ctx, 0, textContentTop, outW, Math.max(1,totalH),
+      parseFloat($('gradAng').value), c1, c2);
+  }
+
+  lines.forEach((toks,li)=>{
+    const lw = lineWidth(toks);
+    let x = (outW - lw)/2 + xoff;
+    const y = textContentTop + li*lineStep + halfLeading;   // em-box top for this line
+
+    toks.forEach((t,ti)=>{
+      for(let i=0;i<t.text.length;i++){
+        const ch=t.text[i];
+        setShadow();
+        ctx.fillStyle = textGrad ? textGrad : t.color;
+        if(olW>0){
+          ctx.lineWidth=olW; ctx.strokeStyle=$('olCol').value; ctx.lineJoin='round';
+          ctx.shadowColor='transparent';
+          ctx.strokeText(ch,x,y);
+          setShadow();
+        }
+        ctx.fillText(ch,x,y);
+        x += ctx.measureText(ch).width + letterSpace;
+      }
+      if(t.space && ti<toks.length-1) x += baseSpaceW;
+    });
+  });
+
+  ctx.restore();
+}
+
+async function exportJPG(){
+  if(!hasImage){toast('Upload an image first',true);return;}
+  const info=$('exportInfo'); info.textContent='Rendering…'; $('exportBtn').disabled=true;
+  try{
+    const longEdge=+$('expLongEdge').value; let outW,outH;
+    if(canvasW>=canvasH){outW=longEdge;outH=Math.round(longEdge*canvasH/canvasW);}
+    else{outH=longEdge;outW=Math.round(longEdge*canvasW/canvasH);}
+    const S=outW/canvasW;
+    const canvas=document.createElement('canvas'); canvas.width=outW; canvas.height=outH;
+    const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+
+    if($('canvasBgMode').value==='grad'){
+      const [c1,c2]=parseGradStops();
+      ctx.fillStyle=makeCanvasGradient(ctx,0,0,outW,outH,parseFloat($('gradAng').value),c1,c2);
+    }else ctx.fillStyle=$('canvasBg').value;
+    ctx.fillRect(0,0,outW,outH);
+
+    const scale=(+$('imgScale').value)/100;
+    const iwC=canvasW*scale, ihC=iwC*(imgNaturalH/imgNaturalW);
+    const xPct=(+$('imgX').value)/100, yPct=(+$('imgY').value)/100;
+    const dx=(canvasW-iwC)*xPct*S, dy=(canvasH-ihC)*yPct*S, dw=iwC*S, dh=ihC*S;
+    const rad=((+$('imgRad').value)/100*canvasW)*S;
+    ctx.save();
+    if(rad>0){roundRectPath(ctx,dx,dy,dw,dh,rad);ctx.clip();}
+    ctx.drawImage(bgImg,dx,dy,dw,dh);
+    ctx.restore();
+
+    drawTextBlock(ctx,'header',outW,outH,S);
+    drawTextBlock(ctx,'explain',outW,outH,S);
+
+    const maxBytes=(+$('expKb').value)*1024; let lo=0.4,hi=0.98,best=null,bestQ=0.4;
+    let blob=await toBlob(canvas,0.95);
+    if(blob&&blob.size<=maxBytes){best=blob;bestQ=0.95;}
+    else{
+      for(let i=0;i<8;i++){
+        const q=(lo+hi)/2; blob=await toBlob(canvas,q);
+        if(blob&&blob.size<=maxBytes){best=blob;bestQ=q;lo=q;}else{hi=q;}
+      }
+      if(!best){best=await toBlob(canvas,0.4);bestQ=0.4;}
+    }
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(best);
+    a.download='overlay_'+outW+'x'+outH+'.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    info.innerHTML=`✅ ${outW}×${outH}px · ${(best.size/1024).toFixed(0)} KB · q${(bestQ*100).toFixed(0)}%`;
+    toast('Saved '+outW+'×'+outH+' JPG');
+  }catch(err){console.error(err);info.textContent='Export failed: '+err.message;toast('Export error: '+err.message,true);}
+  finally{$('exportBtn').disabled=false;}
+}
+$('exportBtn').onclick=exportJPG;
+$('quickExport').onclick=exportJPG;
+$('resetBtn').onclick=()=>location.reload();
+
+let toastT;
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.className='toast'+(err?' err':''),2400);}
+
+/* ---------- init ---------- */
+recomputeCanvas(); updateImgScaleMax(); buildWordColorUI(); render();
+if(isMobile()) openPanel();
+</script>
+</body>
+</html>
